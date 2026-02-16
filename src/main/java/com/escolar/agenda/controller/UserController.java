@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/usuarios")
+@RequestMapping("/api/v1/users")
 public class UserController {
 
 	private final UserService userService;
@@ -24,18 +24,18 @@ public class UserController {
 	@GetMapping
 	@PreAuthorize("hasRole('ADMIN')")
 	public ResponseEntity<List<UserResponse>> list() {
-		return ResponseEntity.ok(userService.listar());
+		return ResponseEntity.ok(userService.list());
 	}
 
 	@GetMapping("/{id}")
 	@PreAuthorize("hasRole('ADMIN')")
 	public ResponseEntity<UserResponse> find(@PathVariable UUID id) {
-		return ResponseEntity.ok(userService.buscar(id));
+		return ResponseEntity.ok(userService.find(id));
 	}
 
 	@PatchMapping("/{id}/desativar")
 	@PreAuthorize("hasRole('ADMIN')")
 	public ResponseEntity<UserResponse> disabled(@PathVariable UUID id) {
-		return ResponseEntity.ok(userService.desativar(id));
+		return ResponseEntity.ok(userService.disable(id));
 	}
 }

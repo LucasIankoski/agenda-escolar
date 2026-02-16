@@ -28,22 +28,21 @@ public class UserService {
 				.orElseThrow(() -> new NoSuchElementException("Usuário não encontrado"));
 	}
 
-	public List<UserResponse> listar() {
+	public List<UserResponse> list() {
 		return userRepository.findAll().stream().map(this::toResponse).toList();
 	}
 
-	public UserResponse buscar(UUID id) {
+	public UserResponse find(UUID id) {
 		return toResponse(getByIdOrThrow(id));
 	}
 
-	public UserResponse desativar(UUID id) {
+	public UserResponse disable(UUID id) {
 		UserApp u = getByIdOrThrow(id);
 		u.setActive(false);
 		return toResponse(userRepository.save(u));
 	}
 
-	// usado pelo AuthService (registro)
-	public UserApp criarUsuario(UserApp usuarioComSenhaEmClaro) {
+	public UserApp create(UserApp usuarioComSenhaEmClaro) {
 		usuarioComSenhaEmClaro.setPassword(passwordEncoder.encode(usuarioComSenhaEmClaro.getPassword()));
 		return userRepository.save(usuarioComSenhaEmClaro);
 	}
