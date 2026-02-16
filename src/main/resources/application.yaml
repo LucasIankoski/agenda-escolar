@@ -2,9 +2,9 @@ spring:
   application:
     name: agenda-api
   datasource:
-    url: jdbc:postgresql://localhost:5432/agenda
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://localhost:5436/diary
+    username: admin
+    password: agenda
   jpa:
     hibernate:
       ddl-auto: update

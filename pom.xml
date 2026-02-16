@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.escolar.agenda</groupId>
-	<artifactId>demo</artifactId>
+	<artifactId>agenda-escolar</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>demo</name>
 	<description>Agenda Escolar</description>
