@@ -1,6 +1,7 @@
 package com.escolar.agenda.repository;
 
 import com.escolar.agenda.entity.Diary;
+import com.escolar.agenda.enums.DiaryVersion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,4 +13,6 @@ import java.util.UUID;
 public interface DiaryRepository extends JpaRepository<Diary, UUID> {
 
 	Page<Diary> findByStudentId(UUID studentId, Pageable pageable);
+
+	Page<Diary> findByStudentIdAndDiaryVersion(UUID studentId, DiaryVersion diaryVersion, Pageable pageable);
 }

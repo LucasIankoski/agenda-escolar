@@ -3,7 +3,9 @@ package com.escolar.agenda.controller;
 import com.escolar.agenda.dto.classroom.ClassroomCreateRequest;
 import com.escolar.agenda.dto.classroom.ClassroomResponse;
 import com.escolar.agenda.dto.classroom.ClassroomUpdateRequest;
+import com.escolar.agenda.dto.student.StudentResponse;
 import com.escolar.agenda.service.ClassroomService;
+import com.escolar.agenda.service.StudentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,7 @@ import java.util.UUID;
 public class ClassroomController {
 
 	private final ClassroomService classroomService;
+	private final StudentService studentService;
 
 	@PostMapping
 	public ResponseEntity<ClassroomResponse> create(@RequestBody @Valid ClassroomCreateRequest request) {
@@ -32,6 +35,11 @@ public class ClassroomController {
 	@GetMapping("/{id}")
 	public ResponseEntity<ClassroomResponse> get(@PathVariable UUID id) {
 		return ResponseEntity.ok(classroomService.get(id));
+	}
+
+	@GetMapping("/{id}/students")
+	public ResponseEntity<List<StudentResponse>> listStudents(@PathVariable UUID id) {
+		return ResponseEntity.ok(studentService.listByClassroom(id));
 	}
 
 	@PutMapping("/{id}")

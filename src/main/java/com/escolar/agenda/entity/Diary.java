@@ -1,5 +1,6 @@
 package com.escolar.agenda.entity;
 
+import com.escolar.agenda.enums.DiaryVersion;
 import com.escolar.agenda.enums.FoodLevel;
 import com.escolar.agenda.enums.HygieneType;
 import com.escolar.agenda.enums.Mood;
@@ -46,6 +47,13 @@ public class Diary {
 	@CreationTimestamp
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "diary_version", nullable = false)
+	private DiaryVersion diaryVersion = DiaryVersion.V1;
+
+	@Column(name = "v2_payload", columnDefinition = "TEXT")
+	private String v2Payload;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "food_level", nullable = false)

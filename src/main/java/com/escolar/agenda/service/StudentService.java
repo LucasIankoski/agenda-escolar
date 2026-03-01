@@ -68,6 +68,15 @@ public class StudentService {
 		return studentRepository.findAll().stream().map(this::toResponse).toList();
 	}
 
+	public List<StudentResponse> listByClassroom(UUID classroomId) {
+		classroomRepository.findById(classroomId)
+				.orElseThrow(() -> new NoSuchElementException("Turma nÃ£o encontrada"));
+
+		return studentRepository.findAllByClassroomId(classroomId).stream()
+				.map(this::toResponse)
+				.toList();
+	}
+
 	public StudentResponse get(UUID id) {
 		Student s = studentRepository.findById(id)
 				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
