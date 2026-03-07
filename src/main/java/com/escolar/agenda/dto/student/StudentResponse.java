@@ -10,5 +10,8 @@ public record StudentResponse(
 		Timestamp birthDate,
 		UUID classroomId,
 		UUID parentUserId,
+		String parentName,
+		String parentLastName,
+		String parentContact,
 		String parentEmail
 ) {}

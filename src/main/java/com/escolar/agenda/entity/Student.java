@@ -33,6 +33,15 @@ public class Student {
 	@Column(name = "last_name", nullable = false, length = 120)
 	private String lastName;
 
+	@Column(name = "responsible_name", length = 120)
+	private String responsibleName;
+
+	@Column(name = "responsible_last_name", length = 120)
+	private String responsibleLastName;
+
+	@Column(name = "responsible_contact", length = 32)
+	private String responsibleContact;
+
 	@Column(name = "birth_date")
 	private Timestamp birthDate;
 

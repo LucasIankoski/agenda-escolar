@@ -4,17 +4,17 @@ import com.escolar.agenda.dto.student.StudentCreateRequest;
 import com.escolar.agenda.dto.student.StudentResponse;
 import com.escolar.agenda.entity.Classroom;
 import com.escolar.agenda.entity.Student;
-import com.escolar.agenda.enums.UserType;
 import com.escolar.agenda.entity.UserApp;
+import com.escolar.agenda.enums.UserType;
 import com.escolar.agenda.repository.ClassroomRepository;
 import com.escolar.agenda.repository.StudentRepository;
 import com.escolar.agenda.repository.UserRepository;
+import com.escolar.agenda.util.LoginNormalizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.Normalizer;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -31,36 +31,37 @@ public class StudentService {
 
 	@Transactional
 	public StudentResponse create(StudentCreateRequest req) {
-
 		Classroom classroom = classroomRepository.findById(req.classroomId())
-				.orElseThrow(() -> new NoSuchElementException("Turma não encontrada"));
+				.orElseThrow(() -> new NoSuchElementException("Turma nao encontrada"));
 
-		String baseMail = buildEmailBase(req.name(), req.lastName()); // nome.sobrenome
-		String email = baseMail; // se quiser, pode adicionar domínio depois (ex: @escola.com)
-
-		if (userRepository.existsByEmail(email)) {
-			throw new IllegalArgumentException("Já existe usuário com email: " + email);
+		String parentContactLogin = LoginNormalizer.normalize(req.parentContact());
+		if (!LoginNormalizer.isBrazilianMobilePhone(parentContactLogin)) {
+			throw new IllegalArgumentException("Contato do responsavel deve ser um celular valido");
 		}
 
-		// 1) cria usuário PAI
+		if (userRepository.existsByEmail(parentContactLogin)) {
+			throw new IllegalArgumentException("Ja existe usuario com esse contato/login");
+		}
+
 		UserApp parent = new UserApp();
-		parent.setName(req.name() + " " + req.lastName()); // se sua entidade tiver campo name/nome
-		parent.setEmail(email);
+		parent.setName(buildFullName(req.parentName(), req.parentLastName()));
+		parent.setEmail(parentContactLogin);
 		parent.setPassword(passwordEncoder.encode("12345"));
-		parent.setType(UserType.PAI); // ou setRole / setType etc conforme sua entidade
-		parent.setActive(true);          // se tiver ativo
+		parent.setType(UserType.PAI);
+		parent.setActive(true);
 		parent = userRepository.save(parent);
 
-		// 2) cria Student e vincula parentUser
 		Student student = new Student();
 		student.setName(req.name());
 		student.setLastName(req.lastName());
+		student.setResponsibleName(req.parentName().trim());
+		student.setResponsibleLastName(req.parentLastName().trim());
+		student.setResponsibleContact(parentContactLogin);
 		student.setBirthDate(req.birthDate());
 		student.setClassroom(classroom);
 		student.setParentUser(parent);
 
 		student = studentRepository.save(student);
-
 		return toResponse(student);
 	}
 
@@ -70,7 +71,7 @@ public class StudentService {
 
 	public List<StudentResponse> listByClassroom(UUID classroomId) {
 		classroomRepository.findById(classroomId)
-				.orElseThrow(() -> new NoSuchElementException("Turma nÃ£o encontrada"));
+				.orElseThrow(() -> new NoSuchElementException("Turma nao encontrada"));
 
 		return studentRepository.findAllByClassroomId(classroomId).stream()
 				.map(this::toResponse)
@@ -79,7 +80,7 @@ public class StudentService {
 
 	public StudentResponse get(UUID id) {
 		Student s = studentRepository.findById(id)
-				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
+				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
 		return toResponse(s);
 	}
 
@@ -89,8 +90,27 @@ public class StudentService {
 	}
 
 	private StudentResponse toResponse(Student s) {
-		UUID parentId = s.getParentUser() != null ? s.getParentUser().getId() : null;
-		String parentEmail = s.getParentUser() != null ? s.getParentUser().getEmail() : null;
+		UserApp parentUser = s.getParentUser();
+		UUID parentId = parentUser != null ? parentUser.getId() : null;
+		String parentEmail = parentUser != null ? parentUser.getEmail() : null;
+
+		String parentName = s.getResponsibleName();
+		String parentLastName = s.getResponsibleLastName();
+		String parentContact = s.getResponsibleContact();
+
+		if (parentUser != null) {
+			if (isBlank(parentContact)) {
+				parentContact = parentUser.getEmail();
+			}
+
+			if (isBlank(parentName) && !isBlank(parentUser.getName())) {
+				String[] parsedName = splitFullName(parentUser.getName());
+				parentName = parsedName[0];
+				if (isBlank(parentLastName)) {
+					parentLastName = parsedName[1];
+				}
+			}
+		}
 
 		return new StudentResponse(
 				s.getId(),
@@ -99,29 +119,35 @@ public class StudentService {
 				s.getBirthDate(),
 				s.getClassroom().getId(),
 				parentId,
+				parentName,
+				parentLastName,
+				parentContact,
 				parentEmail
 		);
 	}
 
 	private Student getEntityOrThrow(UUID id) {
 		return studentRepository.findById(id)
-				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
+				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
 	}
 
-	/**
-	 * Gera "nome.sobrenome" normalizado:
-	 * - minúsculo
-	 * - sem acentos
-	 * - espaços removidos
-	 */
-	private String buildEmailBase(String name, String lastName) {
-		String full = (name + "." + lastName).toLowerCase();
-		full = Normalizer.normalize(full, Normalizer.Form.NFD)
-				.replaceAll("\\p{M}", ""); // remove acentos
-		full = full.replaceAll("[^a-z0-9.]", ""); // remove tudo que não seja a-z 0-9 ou .
-		full = full.replaceAll("\\.+", "."); // evita pontos repetidos
-		full = full.replaceAll("^\\.|\\.$", ""); // remove ponto no começo/fim
-		return full;
+	private String buildFullName(String firstName, String lastName) {
+		return firstName.trim() + " " + lastName.trim();
+	}
+
+	private boolean isBlank(String value) {
+		return value == null || value.isBlank();
+	}
+
+	private String[] splitFullName(String fullName) {
+		String normalized = fullName.trim().replaceAll("\\s+", " ");
+		int firstSpace = normalized.indexOf(' ');
+		if (firstSpace < 0) {
+			return new String[]{normalized, null};
+		}
+
+		String firstName = normalized.substring(0, firstSpace);
+		String lastName = normalized.substring(firstSpace + 1).trim();
+		return new String[]{firstName, isBlank(lastName) ? null : lastName};
 	}
 }
-

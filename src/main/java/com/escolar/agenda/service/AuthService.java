@@ -6,6 +6,7 @@ import com.escolar.agenda.dto.auth.RegisterRequest;
 import com.escolar.agenda.entity.UserApp;
 import com.escolar.agenda.repository.UserRepository;
 import com.escolar.agenda.security.JwtService;
+import com.escolar.agenda.util.LoginNormalizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,27 +23,29 @@ public class AuthService {
 	private final JwtService jwtService;
 
 	public AuthResponse register(RegisterRequest request) {
-		if (userRepository.existsByEmail(request.email())) {
-			throw new IllegalArgumentException("Email já cadastrado");
+		String normalizedEmail = LoginNormalizer.normalize(request.email());
+		if (userRepository.existsByEmail(normalizedEmail)) {
+			throw new IllegalArgumentException("Email ja cadastrado");
 		}
 
 		UserApp newUser = UserApp.builder()
 				.name(request.nome())
-				.email(request.email())
+				.email(normalizedEmail)
 				.password(request.password())
 				.type(request.type())
 				.active(true)
 				.build();
 
-		UserApp salvo = userService.create(newUser);
-		String token = jwtService.generateToken(salvo);
+		UserApp saved = userService.create(newUser);
+		String token = jwtService.generateToken(saved);
 
 		return new AuthResponse(token, jwtService.getExpirationMs());
 	}
 
 	public AuthResponse login(LoginRequest request) {
+		String normalizedLogin = LoginNormalizer.normalize(request.login());
 		Authentication auth = authenticationManager.authenticate(
-				new UsernamePasswordAuthenticationToken(request.email(), request.password())
+				new UsernamePasswordAuthenticationToken(normalizedLogin, request.password())
 		);
 
 		UserApp user = (UserApp) auth.getPrincipal();

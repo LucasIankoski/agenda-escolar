@@ -2,7 +2,6 @@ package com.escolar.agenda.controller;
 
 import com.escolar.agenda.dto.student.StudentCreateRequest;
 import com.escolar.agenda.dto.student.StudentResponse;
-import com.escolar.agenda.dto.student.StudentUpdateRequest;
 import com.escolar.agenda.service.StudentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
