@@ -11,6 +11,7 @@ import com.escolar.agenda.repository.StudentRepository;
 import com.escolar.agenda.repository.UserRepository;
 import com.escolar.agenda.util.LoginNormalizer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,7 +66,15 @@ public class StudentService {
 		return toResponse(student);
 	}
 
-	public List<StudentResponse> list() {
+	public List<StudentResponse> list(UserApp loggedUser) {
+		if (isParent(loggedUser)) {
+			return studentRepository.findAllByParentUserId(loggedUser.getId())
+					.stream()
+					.map(this::toResponse)
+					.toList();
+		}
+
+		validateCanViewAllStudents(loggedUser);
 		return studentRepository.findAll().stream().map(this::toResponse).toList();
 	}
 
@@ -78,9 +87,28 @@ public class StudentService {
 				.toList();
 	}
 
-	public StudentResponse get(UUID id) {
+	public StudentResponse get(UUID id, UserApp loggedUser) {
 		Student s = studentRepository.findById(id)
 				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
+		validateStudentAccess(s, loggedUser);
+		return toResponse(s);
+	}
+
+	public StudentResponse getByResponsible(String responsibleLogin, UserApp loggedUser) {
+		String normalizedLogin;
+		if (isParent(loggedUser)) {
+			normalizedLogin = loggedUser.getEmail();
+		} else {
+			validateCanViewAllStudents(loggedUser);
+			if (responsibleLogin == null || responsibleLogin.isBlank()) {
+				throw new IllegalArgumentException("Login do responsavel e obrigatorio");
+			}
+			normalizedLogin = LoginNormalizer.normalize(responsibleLogin);
+		}
+
+		Student s = studentRepository.findByResponsibleContact(normalizedLogin)
+				.or(() -> studentRepository.findByParentUserEmail(normalizedLogin))
+				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado para o responsavel informado"));
 		return toResponse(s);
 	}
 
@@ -129,6 +157,36 @@ public class StudentService {
 	private Student getEntityOrThrow(UUID id) {
 		return studentRepository.findById(id)
 				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
+	}
+
+	private void validateCanViewAllStudents(UserApp loggedUser) {
+		if (!isAdminOrProfessor(loggedUser)) {
+			throw new AccessDeniedException("Acesso negado para visualizar alunos.");
+		}
+	}
+
+	private void validateStudentAccess(Student student, UserApp loggedUser) {
+		if (isAdminOrProfessor(loggedUser)) {
+			return;
+		}
+
+		if (isParent(loggedUser) && isLinkedParent(student, loggedUser)) {
+			return;
+		}
+
+		throw new AccessDeniedException("Voce nao tem acesso a este aluno.");
+	}
+
+	private boolean isLinkedParent(Student student, UserApp loggedUser) {
+		return student.getParentUser() != null && student.getParentUser().getId().equals(loggedUser.getId());
+	}
+
+	private boolean isParent(UserApp user) {
+		return user.getType() == UserType.PAI;
+	}
+
+	private boolean isAdminOrProfessor(UserApp user) {
+		return user.getType() == UserType.ADMIN || user.getType() == UserType.PROFESSOR;
 	}
 
 	private String buildFullName(String firstName, String lastName) {

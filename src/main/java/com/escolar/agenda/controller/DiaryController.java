@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +31,7 @@ public class DiaryController {
 	private final DiaryService diaryService;
 
 	@PostMapping
+	@PreAuthorize("hasAnyRole('ADMIN','PROFESSOR')")
 	public ResponseEntity<DiaryResponse> create(@RequestBody @Valid DiaryCreateRequest req,
 												Authentication authentication) {
 		UserApp logged = (UserApp) authentication.getPrincipal();
@@ -37,6 +39,7 @@ public class DiaryController {
 	}
 
 	@GetMapping("/student/{studentId}")
+	@PreAuthorize("hasAnyRole('ADMIN','PROFESSOR','PAI')")
 	public ResponseEntity<Page<DiaryResponse>> listByStudent(@PathVariable UUID studentId,
 															 @RequestParam(defaultValue = "0") int page,
 															 @RequestParam(defaultValue = "10") int size,
@@ -47,6 +50,7 @@ public class DiaryController {
 	}
 
 	@GetMapping("/{diaryId}")
+	@PreAuthorize("hasAnyRole('ADMIN','PROFESSOR','PAI')")
 	public ResponseEntity<DiaryResponse> get(@PathVariable UUID diaryId,
 											 Authentication authentication) {
 		UserApp logged = (UserApp) authentication.getPrincipal();
