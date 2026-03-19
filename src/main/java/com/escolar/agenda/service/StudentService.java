@@ -7,6 +7,7 @@ import com.escolar.agenda.entity.Student;
 import com.escolar.agenda.entity.UserApp;
 import com.escolar.agenda.enums.UserType;
 import com.escolar.agenda.repository.ClassroomRepository;
+import com.escolar.agenda.repository.ParentNoteRepository;
 import com.escolar.agenda.repository.StudentRepository;
 import com.escolar.agenda.repository.UserRepository;
 import com.escolar.agenda.util.LoginNormalizer;
@@ -17,8 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +29,7 @@ public class StudentService {
 
 	private final StudentRepository studentRepository;
 	private final ClassroomRepository classroomRepository;
+	private final ParentNoteRepository parentNoteRepository;
 
 	private final UserRepository userRepository;
 	private final PasswordEncoder passwordEncoder;
@@ -33,11 +37,11 @@ public class StudentService {
 	@Transactional
 	public StudentResponse create(StudentCreateRequest req) {
 		Classroom classroom = classroomRepository.findById(req.classroomId())
-				.orElseThrow(() -> new NoSuchElementException("Turma nao encontrada"));
+				.orElseThrow(() -> new NoSuchElementException("Turma não encontrada"));
 
 		String parentContactLogin = LoginNormalizer.normalize(req.parentContact());
 		if (!LoginNormalizer.isBrazilianMobilePhone(parentContactLogin)) {
-			throw new IllegalArgumentException("Contato do responsavel deve ser um celular valido");
+			throw new IllegalArgumentException("Contato do responsável deve ser um celular válido");
 		}
 
 		if (userRepository.existsByEmail(parentContactLogin)) {
@@ -63,35 +67,30 @@ public class StudentService {
 		student.setParentUser(parent);
 
 		student = studentRepository.save(student);
-		return toResponse(student);
+		return toResponse(student, 0L);
 	}
 
 	public List<StudentResponse> list(UserApp loggedUser) {
 		if (isParent(loggedUser)) {
-			return studentRepository.findAllByParentUserId(loggedUser.getId())
-					.stream()
-					.map(this::toResponse)
-					.toList();
+			return toResponseList(studentRepository.findAllByParentUserId(loggedUser.getId()));
 		}
 
 		validateCanViewAllStudents(loggedUser);
-		return studentRepository.findAll().stream().map(this::toResponse).toList();
+		return toResponseList(studentRepository.findAll());
 	}
 
 	public List<StudentResponse> listByClassroom(UUID classroomId) {
 		classroomRepository.findById(classroomId)
-				.orElseThrow(() -> new NoSuchElementException("Turma nao encontrada"));
+				.orElseThrow(() -> new NoSuchElementException("Turma não encontrada"));
 
-		return studentRepository.findAllByClassroomId(classroomId).stream()
-				.map(this::toResponse)
-				.toList();
+		return toResponseList(studentRepository.findAllByClassroomId(classroomId));
 	}
 
 	public StudentResponse get(UUID id, UserApp loggedUser) {
 		Student s = studentRepository.findById(id)
-				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
+				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
 		validateStudentAccess(s, loggedUser);
-		return toResponse(s);
+		return toResponse(s, loadPendingNoteCount(s.getId()));
 	}
 
 	public StudentResponse getByResponsible(String responsibleLogin, UserApp loggedUser) {
@@ -101,15 +100,15 @@ public class StudentService {
 		} else {
 			validateCanViewAllStudents(loggedUser);
 			if (responsibleLogin == null || responsibleLogin.isBlank()) {
-				throw new IllegalArgumentException("Login do responsavel e obrigatorio");
+				throw new IllegalArgumentException("Login do responsável é obrigatório");
 			}
 			normalizedLogin = LoginNormalizer.normalize(responsibleLogin);
 		}
 
 		Student s = studentRepository.findByResponsibleContact(normalizedLogin)
 				.or(() -> studentRepository.findByParentUserEmail(normalizedLogin))
-				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado para o responsavel informado"));
-		return toResponse(s);
+				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado para o responsável informado"));
+		return toResponse(s, loadPendingNoteCount(s.getId()));
 	}
 
 	public void delete(UUID id) {
@@ -117,7 +116,31 @@ public class StudentService {
 		studentRepository.delete(s);
 	}
 
-	private StudentResponse toResponse(Student s) {
+	private List<StudentResponse> toResponseList(List<Student> students) {
+		Map<UUID, Long> pendingCounts = loadPendingNoteCounts(students);
+		return students.stream()
+				.map(student -> toResponse(student, pendingCounts.getOrDefault(student.getId(), 0L)))
+				.toList();
+	}
+
+	private Map<UUID, Long> loadPendingNoteCounts(List<Student> students) {
+		List<UUID> studentIds = students.stream().map(Student::getId).toList();
+		if (studentIds.isEmpty()) {
+			return Map.of();
+		}
+
+		return parentNoteRepository.countPendingByStudentIds(studentIds).stream()
+				.collect(Collectors.toMap(
+						ParentNoteRepository.ParentNotePendingCount::getStudentId,
+						ParentNoteRepository.ParentNotePendingCount::getPendingCount
+				));
+	}
+
+	private long loadPendingNoteCount(UUID studentId) {
+		return parentNoteRepository.countByStudentIdAndReadFalse(studentId);
+	}
+
+	private StudentResponse toResponse(Student s, long pendingParentNoteCount) {
 		UserApp parentUser = s.getParentUser();
 		UUID parentId = parentUser != null ? parentUser.getId() : null;
 		String parentEmail = parentUser != null ? parentUser.getEmail() : null;
@@ -150,13 +173,14 @@ public class StudentService {
 				parentName,
 				parentLastName,
 				parentContact,
-				parentEmail
+				parentEmail,
+				pendingParentNoteCount
 		);
 	}
 
 	private Student getEntityOrThrow(UUID id) {
 		return studentRepository.findById(id)
-				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
+				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
 	}
 
 	private void validateCanViewAllStudents(UserApp loggedUser) {
@@ -174,7 +198,7 @@ public class StudentService {
 			return;
 		}
 
-		throw new AccessDeniedException("Voce nao tem acesso a este aluno.");
+		throw new AccessDeniedException("Você não tem acesso a este aluno.");
 	}
 
 	private boolean isLinkedParent(Student student, UserApp loggedUser) {

@@ -13,5 +13,6 @@ public record StudentResponse(
 		String parentName,
 		String parentLastName,
 		String parentContact,
-		String parentEmail
+		String parentEmail,
+		long pendingParentNoteCount
 ) {}
