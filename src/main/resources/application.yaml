@@ -7,6 +7,11 @@ spring:
     username: ${DB_USERNAME:admin}
     password: ${DB_PASSWORD:agenda}
 
+  servlet:
+    multipart:
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:10MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:50MB}
+
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:validate}
@@ -26,3 +31,8 @@ server:
 jwt:
   secret: ${JWT_SECRET:uma-chave-bem-grande-com-mais-de-32-chars-123456}
   expiration: ${JWT_EXPIRATION:86400000}
+
+app:
+  gallery:
+    storage:
+      root-path: ${GALLERY_STORAGE_ROOT:storage/student-gallery}
