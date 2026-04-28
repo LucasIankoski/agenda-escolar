@@ -1,12 +1,12 @@
 package com.escolar.agenda.config;
 
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.cors.CorsConfigurationSource;
-
-import java.util.List;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class CorsConfig {
@@ -18,6 +18,7 @@ public class CorsConfig {
 		config.setAllowedOrigins(List.of(
 				"http://localhost:3000",
 				"http://localhost:5173",
+				"http://localhost:57225",
 				"https://6122-2804-d51-7e05-9400-c430-9aa0-7d49-e0be.ngrok-free.app/"
 				// "https://seu-frontend.com" (produção)
 		));

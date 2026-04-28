@@ -41,16 +41,14 @@ public class DiaryService {
 	private final StudentRepository studentRepository;
 	private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
-	/**
-	 * CriaÃ§Ã£o: somente PROFESSOR (ou ADMIN).
-	 */
 	@Transactional
 	public DiaryResponse create(DiaryCreateRequest req, UserApp loggedUser) {
 		validateProfessorOrAdmin(loggedUser);
 
-		Student student = getStudentOrThrow(req.studentId());
+		Student student = getStudentOrThrow(req.studentId(), loggedUser);
 
 		Diary d = new Diary();
+		d.setSchool(loggedUser.getSchool());
 		d.setStudent(student);
 		d.setCreatedBy(loggedUser);
 		d.setDiaryVersion(DiaryVersion.V1);
@@ -79,16 +77,16 @@ public class DiaryService {
 	public DiaryResponseV2 createV2(DiaryCreateV2Request req, UserApp loggedUser) {
 		validateProfessorOrAdmin(loggedUser);
 
-		Student student = getStudentOrThrow(req.studentId());
+		Student student = getStudentOrThrow(req.studentId(), loggedUser);
 		DiaryV2Payload payload = req.payload();
 
 		Diary d = new Diary();
+		d.setSchool(loggedUser.getSchool());
 		d.setStudent(student);
 		d.setCreatedBy(loggedUser);
 		d.setDiaryVersion(DiaryVersion.V2);
 		d.setV2Payload(writePayload(payload));
 
-		// Preenche os campos legados com um resumo para manter compatibilidade com a v1.
 		d.setFoodLevel(deriveLegacyFoodLevel(payload));
 		d.setFoodNotes(buildFoodSummary(payload.meals()));
 		d.setSleepStart(deriveSleepStart(payload.sleep()));
@@ -103,68 +101,69 @@ public class DiaryService {
 		return toV2Response(d);
 	}
 
-	/**
-	 * Listagem por aluno:
-	 * - PROFESSOR/ADMIN pode ver
-	 * - PAI pode ver apenas se for o responsÃ¡vel do aluno (student.parentUser)
-	 */
 	public Page<DiaryResponse> listByStudent(UUID studentId, Pageable pageable, UserApp loggedUser) {
-
-		Student student = getStudentOrThrow(studentId);
+		Student student = getStudentOrThrow(studentId, loggedUser);
 		validateStudentAccess(student, loggedUser);
 
-		return diaryRepository.findByStudentId(studentId, pageable).map(this::toResponse);
+		return diaryRepository.findBySchoolIdAndStudentId(loggedUser.getSchool().getId(), studentId, pageable)
+				.map(this::toResponse);
 	}
 
 	public Page<DiaryResponseV2> listByStudentV2(UUID studentId, Pageable pageable, UserApp loggedUser) {
-		Student student = getStudentOrThrow(studentId);
+		Student student = getStudentOrThrow(studentId, loggedUser);
 		validateStudentAccess(student, loggedUser);
 
-		return diaryRepository.findByStudentIdAndDiaryVersion(studentId, DiaryVersion.V2, pageable)
+		return diaryRepository.findBySchoolIdAndStudentIdAndDiaryVersion(
+						loggedUser.getSchool().getId(),
+						studentId,
+						DiaryVersion.V2,
+						pageable
+				)
 				.map(this::toV2Response);
 	}
 
-	/**
-	 * Get por id:
-	 * Se PAI acessar, marca como lido automaticamente.
-	 */
 	@Transactional
 	public DiaryResponse get(UUID diaryId, UserApp loggedUser) {
-
-		Diary d = getDiaryOrThrow(diaryId);
-		markAsReadWhenParent(d, loggedUser);
+		Diary d = getDiaryOrThrow(diaryId, loggedUser);
+		d = markAsReadWhenParent(d, loggedUser);
 
 		return toResponse(d);
 	}
 
 	@Transactional
 	public DiaryResponseV2 getV2(UUID diaryId, UserApp loggedUser) {
-		Diary d = getDiaryOrThrow(diaryId);
+		Diary d = getDiaryOrThrow(diaryId, loggedUser);
 
 		if (d.getDiaryVersion() != DiaryVersion.V2) {
-			throw new NoSuchElementException("Diário não encontrado");
+			throw new NoSuchElementException("Diario nao encontrado");
 		}
 
 		d = markAsReadWhenParent(d, loggedUser);
 		return toV2Response(d);
 	}
 
-	private Student getStudentOrThrow(UUID studentId) {
-		return studentRepository.findById(studentId)
-				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
+	private Student getStudentOrThrow(UUID studentId, UserApp loggedUser) {
+		return studentRepository.findByIdAndSchoolId(studentId, loggedUser.getSchool().getId())
+				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
 	}
 
-	private Diary getDiaryOrThrow(UUID diaryId) {
-		return diaryRepository.findById(diaryId)
-				.orElseThrow(() -> new NoSuchElementException("Diário não encontrado"));
+	private Diary getDiaryOrThrow(UUID diaryId, UserApp loggedUser) {
+		return diaryRepository.findByIdAndSchoolId(diaryId, loggedUser.getSchool().getId())
+				.orElseThrow(() -> new NoSuchElementException("Diario nao encontrado"));
 	}
 
 	private void validateStudentAccess(Student student, UserApp loggedUser) {
-		if (isPai(loggedUser)) {
-			if (student.getParentUser() == null || !student.getParentUser().getId().equals(loggedUser.getId())) {
-				throw new AccessDeniedException("Você não tem acesso a este aluno.");
-			}
+		if (isProfessorOrAdmin(loggedUser)) {
+			return;
 		}
+
+		if (isPai(loggedUser)
+				&& student.getParentUser() != null
+				&& student.getParentUser().getId().equals(loggedUser.getId())) {
+			return;
+		}
+
+		throw new AccessDeniedException("Voce nao tem acesso a este aluno.");
 	}
 
 	private Diary markAsReadWhenParent(Diary d, UserApp loggedUser) {
@@ -172,7 +171,7 @@ public class DiaryService {
 
 		if (isPai(loggedUser)) {
 			if (student.getParentUser() == null || !student.getParentUser().getId().equals(loggedUser.getId())) {
-				throw new AccessDeniedException("VocÃª nÃ£o tem acesso a este diÃ¡rio.");
+				throw new AccessDeniedException("Voce nao tem acesso a este diario.");
 			}
 
 			if (!d.isRead()) {
@@ -188,7 +187,7 @@ public class DiaryService {
 
 	private void validateProfessorOrAdmin(UserApp u) {
 		if (!isProfessorOrAdmin(u)) {
-			throw new AccessDeniedException("Apenas PROFESSOR/ADMIN pode criar diário.");
+			throw new AccessDeniedException("Apenas PROFESSOR/ADMIN pode criar diario.");
 		}
 	}
 
@@ -249,19 +248,19 @@ public class DiaryService {
 		try {
 			return objectMapper.writeValueAsString(payload);
 		} catch (JsonProcessingException e) {
-			throw new IllegalStateException("Não foi possível serializar o payload v2 do diário", e);
+			throw new IllegalStateException("Nao foi possivel serializar o payload v2 do diario", e);
 		}
 	}
 
 	private DiaryV2Payload readPayload(String payload) {
 		if (payload == null || payload.isBlank()) {
-			throw new IllegalStateException("DiÃ¡rio v2 sem payload");
+			throw new IllegalStateException("Diario v2 sem payload");
 		}
 
 		try {
 			return objectMapper.readValue(payload, DiaryV2Payload.class);
 		} catch (JsonProcessingException e) {
-			throw new IllegalStateException("NÃo foi possível ler o payload v2 do diário", e);
+			throw new IllegalStateException("Nao foi possivel ler o payload v2 do diario", e);
 		}
 	}
 
@@ -293,8 +292,8 @@ public class DiaryService {
 
 	private String buildFoodSummary(DiaryV2Payload.Meals meals) {
 		StringJoiner joiner = new StringJoiner("; ");
-		appendMeal(joiner, "Café da manha", meals.breakfast());
-		appendMeal(joiner, "Almoço", meals.lunch());
+		appendMeal(joiner, "Cafe da manha", meals.breakfast());
+		appendMeal(joiner, "Almoco", meals.lunch());
 		appendMeal(joiner, "Mamadeira", meals.bottle());
 		appendMeal(joiner, "Fruta", meals.fruit());
 		appendMeal(joiner, "Janta", meals.dinner());
@@ -363,13 +362,13 @@ public class DiaryService {
 		DiaryV2Payload.PedagogicalProposals proposals = payload.pedagogicalProposals();
 
 		if (proposals.pedagogicalActivity()) {
-			activities.add("Ativ. pedagógica");
+			activities.add("Ativ. pedagogica");
 		}
 		if (proposals.music()) {
-			activities.add("Música");
+			activities.add("Musica");
 		}
 		if (proposals.patio()) {
-			activities.add("Pátio");
+			activities.add("Patio");
 		}
 		if (proposals.freePlay()) {
 			activities.add("Brincadeira livre");

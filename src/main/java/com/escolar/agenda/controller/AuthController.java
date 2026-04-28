@@ -2,11 +2,13 @@ package com.escolar.agenda.controller;
 
 import com.escolar.agenda.dto.auth.AuthResponse;
 import com.escolar.agenda.dto.auth.LoginRequest;
-import com.escolar.agenda.dto.auth.RegisterRequest;
+import com.escolar.agenda.dto.school.SchoolLoginOptionResponse;
 import com.escolar.agenda.service.AuthService;
+import com.escolar.agenda.service.SchoolService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,10 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
 	private final AuthService authService;
+	private final SchoolService schoolService;
 
-	@PostMapping("/register")
-	public ResponseEntity<AuthResponse> register(@RequestBody @Valid RegisterRequest request) {
-		return ResponseEntity.ok(authService.register(request));
+	@GetMapping("/schools")
+	public ResponseEntity<java.util.List<SchoolLoginOptionResponse>> schools() {
+		return ResponseEntity.ok(schoolService.listLoginOptions());
 	}
 
 	@PostMapping("/login")

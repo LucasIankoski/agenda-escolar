@@ -23,8 +23,10 @@ public class StudentController {
 
 	@PostMapping
 	@PreAuthorize("hasRole('ADMIN')")
-	public ResponseEntity<StudentResponse> create(@RequestBody @Valid StudentCreateRequest req) {
-		return ResponseEntity.ok(studentService.create(req));
+	public ResponseEntity<StudentResponse> create(@RequestBody @Valid StudentCreateRequest req,
+												  Authentication authentication) {
+		UserApp logged = (UserApp) authentication.getPrincipal();
+		return ResponseEntity.ok(studentService.create(req, logged));
 	}
 
 	@GetMapping
@@ -52,8 +54,9 @@ public class StudentController {
 
 	@DeleteMapping("/{id}")
 	@PreAuthorize("hasRole('ADMIN')")
-	public ResponseEntity<Void> delete(@PathVariable UUID id) {
-		studentService.delete(id);
+	public ResponseEntity<Void> delete(@PathVariable UUID id, Authentication authentication) {
+		UserApp logged = (UserApp) authentication.getPrincipal();
+		studentService.delete(id, logged);
 		return ResponseEntity.noContent().build();
 	}
 }

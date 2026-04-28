@@ -27,6 +27,11 @@ public class Student {
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
 
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "school_id", nullable = false,
+			foreignKey = @ForeignKey(name = "fk_student_school"))
+	private School school;
+
 	@Column(nullable = false, length = 120)
 	private String name;
 

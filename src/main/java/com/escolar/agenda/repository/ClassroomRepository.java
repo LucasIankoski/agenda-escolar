@@ -7,6 +7,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ClassroomRepository extends JpaRepository<Classroom, UUID> {
-	Optional<Classroom> findByName(String name);
-	boolean existsByName(String name);
+	Optional<Classroom> findByIdAndSchoolId(UUID id, UUID schoolId);
+
+	Optional<Classroom> findBySchoolIdAndName(UUID schoolId, String name);
+
+	boolean existsBySchoolIdAndName(UUID schoolId, String name);
+
+	java.util.List<Classroom> findAllBySchoolId(UUID schoolId);
 }
