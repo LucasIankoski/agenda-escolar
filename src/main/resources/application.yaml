@@ -27,12 +27,25 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:framework}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
 
 jwt:
   secret: ${JWT_SECRET:uma-chave-bem-grande-com-mais-de-32-chars-123456}
   expiration: ${JWT_EXPIRATION:86400000}
 
 app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:57225}
   super-admin:
     name: ${SUPER_ADMIN_NAME:admin}
     email: ${SUPER_ADMIN_EMAIL:admin@agenda.com}

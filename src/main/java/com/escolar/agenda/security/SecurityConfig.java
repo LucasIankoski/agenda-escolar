@@ -30,7 +30,7 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers("/auth/**").permitAll()
-						.requestMatchers("/actuator/health").permitAll()
+						.requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
 						.anyRequest().authenticated()
 				)
 				.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
