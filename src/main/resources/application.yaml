@@ -33,6 +33,13 @@ jwt:
   expiration: ${JWT_EXPIRATION:86400000}
 
 app:
+  super-admin:
+    name: ${SUPER_ADMIN_NAME:admin}
+    email: ${SUPER_ADMIN_EMAIL:admin@agenda.com}
+    password: ${SUPER_ADMIN_PASSWORD:12345}
+  tenant:
+    default-school-name: ${DEFAULT_SCHOOL_NAME:Escola Padrao}
+    default-school-slug: ${DEFAULT_SCHOOL_SLUG:default}
   gallery:
     storage:
       root-path: ${GALLERY_STORAGE_ROOT:storage/student-gallery}

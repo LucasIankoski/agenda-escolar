@@ -35,20 +35,22 @@ public class StudentService {
 	private final PasswordEncoder passwordEncoder;
 
 	@Transactional
-	public StudentResponse create(StudentCreateRequest req) {
-		Classroom classroom = classroomRepository.findById(req.classroomId())
-				.orElseThrow(() -> new NoSuchElementException("Turma não encontrada"));
+	public StudentResponse create(StudentCreateRequest req, UserApp loggedUser) {
+		UUID schoolId = loggedUser.getSchool().getId();
+		Classroom classroom = classroomRepository.findByIdAndSchoolId(req.classroomId(), schoolId)
+				.orElseThrow(() -> new NoSuchElementException("Turma nao encontrada"));
 
 		String parentContactLogin = LoginNormalizer.normalize(req.parentContact());
 		if (!LoginNormalizer.isBrazilianMobilePhone(parentContactLogin)) {
-			throw new IllegalArgumentException("Contato do responsável deve ser um celular válido");
+			throw new IllegalArgumentException("Contato do responsavel deve ser um celular valido");
 		}
 
-		if (userRepository.existsByEmail(parentContactLogin)) {
-			throw new IllegalArgumentException("Ja existe usuario com esse contato/login");
+		if (userRepository.existsBySchoolIdAndEmail(schoolId, parentContactLogin)) {
+			throw new IllegalArgumentException("Ja existe usuario com esse contato/login nesta escola");
 		}
 
 		UserApp parent = new UserApp();
+		parent.setSchool(loggedUser.getSchool());
 		parent.setName(buildFullName(req.parentName(), req.parentLastName()));
 		parent.setEmail(parentContactLogin);
 		parent.setPassword(passwordEncoder.encode("12345"));
@@ -57,6 +59,7 @@ public class StudentService {
 		parent = userRepository.save(parent);
 
 		Student student = new Student();
+		student.setSchool(loggedUser.getSchool());
 		student.setName(req.name());
 		student.setLastName(req.lastName());
 		student.setResponsibleName(req.parentName().trim());
@@ -71,73 +74,75 @@ public class StudentService {
 	}
 
 	public List<StudentResponse> list(UserApp loggedUser) {
+		UUID schoolId = loggedUser.getSchool().getId();
 		if (isParent(loggedUser)) {
-			return toResponseList(studentRepository.findAllByParentUserId(loggedUser.getId()));
+			return toResponseList(studentRepository.findAllBySchoolIdAndParentUserId(schoolId, loggedUser.getId()), schoolId);
 		}
 
 		validateCanViewAllStudents(loggedUser);
-		return toResponseList(studentRepository.findAll());
+		return toResponseList(studentRepository.findAllBySchoolId(schoolId), schoolId);
 	}
 
-	public List<StudentResponse> listByClassroom(UUID classroomId) {
-		classroomRepository.findById(classroomId)
-				.orElseThrow(() -> new NoSuchElementException("Turma não encontrada"));
+	public List<StudentResponse> listByClassroom(UUID classroomId, UserApp loggedUser) {
+		UUID schoolId = loggedUser.getSchool().getId();
+		classroomRepository.findByIdAndSchoolId(classroomId, schoolId)
+				.orElseThrow(() -> new NoSuchElementException("Turma nao encontrada"));
 
-		return toResponseList(studentRepository.findAllByClassroomId(classroomId));
+		return toResponseList(studentRepository.findAllBySchoolIdAndClassroomId(schoolId, classroomId), schoolId);
 	}
 
 	public StudentResponse get(UUID id, UserApp loggedUser) {
-		Student s = studentRepository.findById(id)
-				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
+		Student s = getEntityOrThrow(id, loggedUser);
 		validateStudentAccess(s, loggedUser);
-		return toResponse(s, loadPendingNoteCount(s.getId()));
+		return toResponse(s, loadPendingNoteCount(s.getId(), loggedUser.getSchool().getId()));
 	}
 
 	public StudentResponse getByResponsible(String responsibleLogin, UserApp loggedUser) {
+		UUID schoolId = loggedUser.getSchool().getId();
 		String normalizedLogin;
 		if (isParent(loggedUser)) {
 			normalizedLogin = loggedUser.getEmail();
 		} else {
 			validateCanViewAllStudents(loggedUser);
 			if (responsibleLogin == null || responsibleLogin.isBlank()) {
-				throw new IllegalArgumentException("Login do responsável é obrigatório");
+				throw new IllegalArgumentException("Login do responsavel e obrigatorio");
 			}
 			normalizedLogin = LoginNormalizer.normalize(responsibleLogin);
 		}
 
-		Student s = studentRepository.findByResponsibleContact(normalizedLogin)
-				.or(() -> studentRepository.findByParentUserEmail(normalizedLogin))
-				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado para o responsável informado"));
-		return toResponse(s, loadPendingNoteCount(s.getId()));
+		Student s = studentRepository.findBySchoolIdAndResponsibleContact(schoolId, normalizedLogin)
+				.or(() -> studentRepository.findBySchoolIdAndParentUserEmail(schoolId, normalizedLogin))
+				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado para o responsavel informado"));
+		return toResponse(s, loadPendingNoteCount(s.getId(), schoolId));
 	}
 
-	public void delete(UUID id) {
-		Student s = getEntityOrThrow(id);
+	public void delete(UUID id, UserApp loggedUser) {
+		Student s = getEntityOrThrow(id, loggedUser);
 		studentRepository.delete(s);
 	}
 
-	private List<StudentResponse> toResponseList(List<Student> students) {
-		Map<UUID, Long> pendingCounts = loadPendingNoteCounts(students);
+	private List<StudentResponse> toResponseList(List<Student> students, UUID schoolId) {
+		Map<UUID, Long> pendingCounts = loadPendingNoteCounts(students, schoolId);
 		return students.stream()
 				.map(student -> toResponse(student, pendingCounts.getOrDefault(student.getId(), 0L)))
 				.toList();
 	}
 
-	private Map<UUID, Long> loadPendingNoteCounts(List<Student> students) {
+	private Map<UUID, Long> loadPendingNoteCounts(List<Student> students, UUID schoolId) {
 		List<UUID> studentIds = students.stream().map(Student::getId).toList();
 		if (studentIds.isEmpty()) {
 			return Map.of();
 		}
 
-		return parentNoteRepository.countPendingByStudentIds(studentIds).stream()
+		return parentNoteRepository.countPendingBySchoolIdAndStudentIds(schoolId, studentIds).stream()
 				.collect(Collectors.toMap(
 						ParentNoteRepository.ParentNotePendingCount::getStudentId,
 						ParentNoteRepository.ParentNotePendingCount::getPendingCount
 				));
 	}
 
-	private long loadPendingNoteCount(UUID studentId) {
-		return parentNoteRepository.countByStudentIdAndReadFalse(studentId);
+	private long loadPendingNoteCount(UUID studentId, UUID schoolId) {
+		return parentNoteRepository.countBySchoolIdAndStudentIdAndReadFalse(schoolId, studentId);
 	}
 
 	private StudentResponse toResponse(Student s, long pendingParentNoteCount) {
@@ -178,9 +183,9 @@ public class StudentService {
 		);
 	}
 
-	private Student getEntityOrThrow(UUID id) {
-		return studentRepository.findById(id)
-				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
+	private Student getEntityOrThrow(UUID id, UserApp loggedUser) {
+		return studentRepository.findByIdAndSchoolId(id, loggedUser.getSchool().getId())
+				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
 	}
 
 	private void validateCanViewAllStudents(UserApp loggedUser) {
@@ -198,7 +203,7 @@ public class StudentService {
 			return;
 		}
 
-		throw new AccessDeniedException("Você não tem acesso a este aluno.");
+		throw new AccessDeniedException("Voce nao tem acesso a este aluno.");
 	}
 
 	private boolean isLinkedParent(Student student, UserApp loggedUser) {

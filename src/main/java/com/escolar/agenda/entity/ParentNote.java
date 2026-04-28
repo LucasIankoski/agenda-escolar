@@ -28,6 +28,11 @@ public class ParentNote {
 	private UUID id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "school_id", nullable = false,
+			foreignKey = @ForeignKey(name = "fk_parent_note_school"))
+	private School school;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "student_id", nullable = false,
 			foreignKey = @ForeignKey(name = "fk_parent_note_student"))
 	private Student student;

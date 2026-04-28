@@ -1,8 +1,10 @@
 package com.escolar.agenda.security;
 
+import com.escolar.agenda.entity.UserApp;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.*;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -35,20 +38,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		}
 
 		final String jwt = authHeader.substring(7);
-		final String userEmail;
+		final UUID userId;
+		final UUID schoolId;
 
 		try {
-			userEmail = jwtService.extractUsername(jwt);
+			userId = jwtService.extractUserId(jwt);
+			schoolId = jwtService.extractSchoolId(jwt);
 		} catch (Exception e) {
-			// token inválido -> segue sem autenticar
 			filterChain.doFilter(request, response);
 			return;
 		}
 
-		if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-			UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
+		if (SecurityContextHolder.getContext().getAuthentication() == null) {
+			UserDetails userDetails = userDetailsService.loadUserByIdAndSchoolId(userId, schoolId);
 
-			if (jwtService.isTokenValid(jwt, userDetails)) {
+			if (userDetails instanceof UserApp user && jwtService.isTokenValid(jwt, user)) {
 				UsernamePasswordAuthenticationToken authToken =
 						new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
 

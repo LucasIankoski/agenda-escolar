@@ -49,16 +49,17 @@ public class StudentGalleryService {
 
 	@Transactional(readOnly = true)
 	public List<StudentGalleryPhoto> listByStudent(UUID studentId, UserApp loggedUser) {
-		Student student = getStudentOrThrow(studentId);
+		Student student = getStudentOrThrow(studentId, loggedUser);
 		validateStudentAccess(student, loggedUser);
-		return studentGalleryPhotoRepository.findAllByStudentIdOrderByCreatedAtDesc(studentId);
+		return studentGalleryPhotoRepository
+				.findAllBySchoolIdAndStudentIdOrderByCreatedAtDesc(loggedUser.getSchool().getId(), studentId);
 	}
 
 	@Transactional
 	public List<StudentGalleryPhoto> create(UUID studentId, String caption, List<MultipartFile> files, UserApp loggedUser) {
 		validateTeacherOrAdmin(loggedUser);
 
-		Student student = getStudentOrThrow(studentId);
+		Student student = getStudentOrThrow(studentId, loggedUser);
 		validateStudentAccess(student, loggedUser);
 
 		if (files == null || files.isEmpty()) {
@@ -74,13 +75,14 @@ public class StudentGalleryService {
 
 		try {
 			for (MultipartFile file : files) {
-				StoredPhoto storedPhoto = storePhoto(student.getId(), file);
+				StoredPhoto storedPhoto = storePhoto(loggedUser.getSchool().getId(), student.getId(), file);
 				storedPaths.add(storedPhoto.originalPath());
 				if (!storedPhoto.thumbnailPath().equals(storedPhoto.originalPath())) {
 					storedPaths.add(storedPhoto.thumbnailPath());
 				}
 
 				StudentGalleryPhoto photo = new StudentGalleryPhoto();
+				photo.setSchool(loggedUser.getSchool());
 				photo.setStudent(student);
 				photo.setCreatedBy(loggedUser);
 				photo.setCaption(normalizedCaption);
@@ -106,14 +108,14 @@ public class StudentGalleryService {
 
 	@Transactional(readOnly = true)
 	public GalleryBinary loadOriginal(UUID studentId, UUID photoId, UserApp loggedUser) {
-		StudentGalleryPhoto photo = getPhotoOrThrow(studentId, photoId);
+		StudentGalleryPhoto photo = getPhotoOrThrow(studentId, photoId, loggedUser);
 		validateStudentAccess(photo.getStudent(), loggedUser);
 		return loadBinary(photo.getStoragePath(), photo.getContentType(), photo.getOriginalFileName());
 	}
 
 	@Transactional(readOnly = true)
 	public GalleryBinary loadThumbnail(UUID studentId, UUID photoId, UserApp loggedUser) {
-		StudentGalleryPhoto photo = getPhotoOrThrow(studentId, photoId);
+		StudentGalleryPhoto photo = getPhotoOrThrow(studentId, photoId, loggedUser);
 		validateStudentAccess(photo.getStudent(), loggedUser);
 		return loadBinary(photo.getThumbnailPath(), photo.getContentType(), photo.getOriginalFileName());
 	}
@@ -132,7 +134,7 @@ public class StudentGalleryService {
 		}
 	}
 
-	private StoredPhoto storePhoto(UUID studentId, MultipartFile file) throws IOException {
+	private StoredPhoto storePhoto(UUID schoolId, UUID studentId, MultipartFile file) throws IOException {
 		validateFile(file);
 
 		ImageFormat imageFormat = resolveImageFormat(file);
@@ -143,7 +145,11 @@ public class StudentGalleryService {
 		}
 
 		Path rootPath = ensureStorageRoot();
-		Path directory = rootPath.resolve(studentId.toString()).resolve(YearMonth.now().toString()).normalize();
+		Path directory = rootPath
+				.resolve(schoolId.toString())
+				.resolve(studentId.toString())
+				.resolve(YearMonth.now().toString())
+				.normalize();
 		ensurePathInsideRoot(rootPath, directory);
 		Files.createDirectories(directory);
 
@@ -292,13 +298,14 @@ public class StudentGalleryService {
 		}
 	}
 
-	private StudentGalleryPhoto getPhotoOrThrow(UUID studentId, UUID photoId) {
-		return studentGalleryPhotoRepository.findByIdAndStudentId(photoId, studentId)
+	private StudentGalleryPhoto getPhotoOrThrow(UUID studentId, UUID photoId, UserApp loggedUser) {
+		return studentGalleryPhotoRepository
+				.findByIdAndSchoolIdAndStudentId(photoId, loggedUser.getSchool().getId(), studentId)
 				.orElseThrow(() -> new NoSuchElementException("Foto da galeria nao encontrada."));
 	}
 
-	private Student getStudentOrThrow(UUID studentId) {
-		return studentRepository.findById(studentId)
+	private Student getStudentOrThrow(UUID studentId, UserApp loggedUser) {
+		return studentRepository.findByIdAndSchoolId(studentId, loggedUser.getSchool().getId())
 				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado."));
 	}
 

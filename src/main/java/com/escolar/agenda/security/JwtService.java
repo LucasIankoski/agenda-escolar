@@ -1,5 +1,6 @@
 package com.escolar.agenda.security;
 
+import com.escolar.agenda.entity.UserApp;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.security.Key;
 import java.util.Date;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class JwtService {
@@ -26,8 +28,18 @@ public class JwtService {
 		return expirationMs;
 	}
 
-	public String generateToken(UserDetails userDetails) {
-		return generateToken(Map.of(), userDetails);
+	public String generateToken(UserApp user) {
+		java.util.HashMap<String, Object> claims = new java.util.HashMap<>();
+		claims.put("userId", user.getId().toString());
+		claims.put("email", user.getEmail());
+		claims.put("type", user.getType().name());
+
+		if (user.getSchool() != null) {
+			claims.put("schoolId", user.getSchool().getId().toString());
+			claims.put("schoolSlug", user.getSchool().getSlug());
+		}
+
+		return generateToken(claims, user);
 	}
 
 	public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
@@ -36,20 +48,28 @@ public class JwtService {
 
 		return Jwts.builder()
 				.setClaims(extraClaims)
-				.setSubject(userDetails.getUsername()) // email
+				.setSubject(resolveSubject(userDetails))
 				.setIssuedAt(now)
 				.setExpiration(exp)
 				.signWith(getSigningKey(), SignatureAlgorithm.HS256)
 				.compact();
 	}
 
-	public String extractUsername(String token) {
-		return extractAllClaims(token).getSubject();
+	public UUID extractUserId(String token) {
+		return UUID.fromString(extractAllClaims(token).getSubject());
 	}
 
-	public boolean isTokenValid(String token, UserDetails userDetails) {
-		final String username = extractUsername(token);
-		return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
+	public UUID extractSchoolId(String token) {
+		String schoolId = extractAllClaims(token).get("schoolId", String.class);
+		return schoolId == null ? null : UUID.fromString(schoolId);
+	}
+
+	public boolean isTokenValid(String token, UserApp user) {
+		UUID tokenSchoolId = extractSchoolId(token);
+		UUID userSchoolId = user.getSchool() != null ? user.getSchool().getId() : null;
+		return extractUserId(token).equals(user.getId())
+				&& java.util.Objects.equals(tokenSchoolId, userSchoolId)
+				&& !isTokenExpired(token);
 	}
 
 	private boolean isTokenExpired(String token) {
@@ -69,9 +89,7 @@ public class JwtService {
 		return Keys.hmacShaKeyFor(keyBytes);
 	}
 
-	// Permite você usar secret "normal" no yml; se não for Base64, converte.
 	private String toBase64IfNeeded(String raw) {
-		// Heurística simples: se decodificação falhar, converte para Base64.
 		try {
 			Decoders.BASE64.decode(raw);
 			return raw;
@@ -79,5 +97,11 @@ public class JwtService {
 			return java.util.Base64.getEncoder().encodeToString(raw.getBytes());
 		}
 	}
-}
 
+	private String resolveSubject(UserDetails userDetails) {
+		if (userDetails instanceof UserApp user) {
+			return user.getId().toString();
+		}
+		return userDetails.getUsername();
+	}
+}

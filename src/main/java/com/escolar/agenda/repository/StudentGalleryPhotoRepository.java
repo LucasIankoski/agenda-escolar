@@ -13,8 +13,8 @@ import java.util.UUID;
 public interface StudentGalleryPhotoRepository extends JpaRepository<StudentGalleryPhoto, UUID> {
 
 	@EntityGraph(attributePaths = {"student", "createdBy"})
-	List<StudentGalleryPhoto> findAllByStudentIdOrderByCreatedAtDesc(UUID studentId);
+	List<StudentGalleryPhoto> findAllBySchoolIdAndStudentIdOrderByCreatedAtDesc(UUID schoolId, UUID studentId);
 
 	@EntityGraph(attributePaths = {"student", "createdBy"})
-	Optional<StudentGalleryPhoto> findByIdAndStudentId(UUID id, UUID studentId);
+	Optional<StudentGalleryPhoto> findByIdAndSchoolIdAndStudentId(UUID id, UUID schoolId, UUID studentId);
 }

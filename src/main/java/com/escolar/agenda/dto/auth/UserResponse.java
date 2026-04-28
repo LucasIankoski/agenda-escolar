@@ -9,5 +9,8 @@ public record UserResponse(
 		String name,
 		String email,
 		UserType type,
-		boolean active
+		boolean active,
+		UUID schoolId,
+		String schoolName,
+		String schoolSlug
 ) {}

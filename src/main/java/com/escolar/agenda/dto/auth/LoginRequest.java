@@ -5,5 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 
 public record LoginRequest(
 		@NotBlank @JsonAlias("email") String login,
-		@NotBlank String password
+		@NotBlank String password,
+		String schoolSlug
 ) {}

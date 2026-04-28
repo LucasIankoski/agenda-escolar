@@ -29,10 +29,11 @@ public class ParentNoteService {
 	public ParentNoteResponse create(UUID studentId, ParentNoteCreateRequest request, UserApp loggedUser) {
 		validateParent(loggedUser);
 
-		Student student = getStudentOrThrow(studentId);
+		Student student = getStudentOrThrow(studentId, loggedUser);
 		validateParentAccess(student, loggedUser);
 
 		ParentNote note = new ParentNote();
+		note.setSchool(loggedUser.getSchool());
 		note.setStudent(student);
 		note.setCreatedBy(loggedUser);
 		note.setMessage(request.message().trim());
@@ -42,10 +43,11 @@ public class ParentNoteService {
 
 	@Transactional(readOnly = true)
 	public List<ParentNoteResponse> listByStudent(UUID studentId, UserApp loggedUser) {
-		Student student = getStudentOrThrow(studentId);
+		Student student = getStudentOrThrow(studentId, loggedUser);
 		validateStudentAccess(student, loggedUser);
 
-		return parentNoteRepository.findAllByStudentIdOrderByCreatedAtDesc(studentId)
+		return parentNoteRepository
+				.findAllBySchoolIdAndStudentIdOrderByCreatedAtDesc(loggedUser.getSchool().getId(), studentId)
 				.stream()
 				.map(this::toResponse)
 				.toList();
@@ -54,9 +56,13 @@ public class ParentNoteService {
 	@Transactional
 	public void markAllAsRead(UUID studentId, UserApp loggedUser) {
 		validateTeacherOrAdmin(loggedUser);
-		getStudentOrThrow(studentId);
+		getStudentOrThrow(studentId, loggedUser);
 
-		List<ParentNote> pendingNotes = parentNoteRepository.findAllByStudentIdAndReadFalseOrderByCreatedAtDesc(studentId);
+		List<ParentNote> pendingNotes = parentNoteRepository
+				.findAllBySchoolIdAndStudentIdAndReadFalseOrderByCreatedAtDesc(
+						loggedUser.getSchool().getId(),
+						studentId
+				);
 		if (pendingNotes.isEmpty()) {
 			return;
 		}
@@ -85,9 +91,9 @@ public class ParentNoteService {
 		);
 	}
 
-	private Student getStudentOrThrow(UUID studentId) {
-		return studentRepository.findById(studentId)
-				.orElseThrow(() -> new NoSuchElementException("Aluno não encontrado"));
+	private Student getStudentOrThrow(UUID studentId, UserApp loggedUser) {
+		return studentRepository.findByIdAndSchoolId(studentId, loggedUser.getSchool().getId())
+				.orElseThrow(() -> new NoSuchElementException("Aluno nao encontrado"));
 	}
 
 	private void validateStudentAccess(Student student, UserApp loggedUser) {
@@ -105,12 +111,12 @@ public class ParentNoteService {
 			return;
 		}
 
-		throw new AccessDeniedException("Você não tem acesso a este aluno.");
+		throw new AccessDeniedException("Voce nao tem acesso a este aluno.");
 	}
 
 	private void validateParent(UserApp loggedUser) {
 		if (!isParent(loggedUser)) {
-			throw new AccessDeniedException("Apenas responsáveis podem enviar recados.");
+			throw new AccessDeniedException("Apenas responsaveis podem enviar recados.");
 		}
 	}
 
